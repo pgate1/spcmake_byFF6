@@ -1,4 +1,4 @@
-# spcmake_byFF5
+# spcmake_byFF
 
 Make a SNES FF6-like SPC from your hexadecimal MML using FinalFantasy6 rom.
 The hexadecimal control code sequence of the FF6 sound driver can be described on a text basis.  
