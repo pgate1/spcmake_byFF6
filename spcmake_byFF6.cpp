@@ -26,7 +26,7 @@ public:
 	uint8 *driver;
 
 	// 効果音シーケンス
-//	uint32 eseq_size;
+	uint32 eseq_size;
 	uint8 *eseq;
 
 	// 常駐波形
@@ -189,7 +189,7 @@ for(i=0; i<FF6_BRR_NUM; i++){
 	// 0x05205E - 0x053C5D -> 0x2C00 - 0x47FF
 	// 0x2C00～効果音シーケンスアドレス
 	// 0x3000～効果音シーケンス
-	uint16 eseq_size = *(uint16*)(rom+0x5205C);
+	eseq_size = *(uint16*)(rom+0x5205C);
 	eseq = new uint8[eseq_size];
 	memcpy(eseq, rom+0x5205E, eseq_size);
 //uint8 buf[0x2C00];memset(buf,0x00,0x2C00);
@@ -344,6 +344,12 @@ int term_end(const string &str, int p)
 	return p;
 }
 
+int num_end(const string &str, int p)
+{
+	while(isdigit(str[p])) p++;
+	return p;
+}
+
 int get_hex(const string &str, int p)
 {
 	char buf[3];
@@ -476,6 +482,7 @@ int spcmake_byFF6::formatter(void)
 			}
 			// 再生時間とフェードアウト時間の設定
 			if(str.substr(p, 7)=="#length"){
+				// 再生時間
 				int sp = skip_space(str, p+7);
 				int ep = term_end(str, sp);
 				string sec_str = str.substr(sp, ep-sp);
@@ -520,8 +527,7 @@ int spcmake_byFF6::formatter(void)
 			// BRR領域がエコーバッファに重なるのチェックを有効にする
 			if(str.substr(p, 19)=="#brr_echo_overcheck"){
 				spc.f_brr_echo_overcheck = true;
-				int ep = term_end(str, p);
-				str.erase(p, ep-p);
+				str.erase(p, 19);
 				p--;
 				continue;
 			}
@@ -547,8 +553,7 @@ int spcmake_byFF6::formatter(void)
 			// 逆位相サラウンド有効
 			if(str.substr(p, 9)=="#surround"){
 				spc.f_surround = true;
-				int ep = term_end(str, p);
-				str.erase(p, ep-p);
+				str.erase(p, 9);
 				p--;
 				continue;
 			}
@@ -789,7 +794,7 @@ int spcmake_byFF6::formatter(void)
 		// ループの処理
 		if(str[p]==']'){ // ループの後ろ
 			int sp = skip_space(str, p+1);
-			int ep = term_end(str, sp);
+			int ep = num_end(str, sp);
 			int loop_count = atoi(str.substr(sp, ep-sp).c_str());
 			str.replace(p, ep-p, "E3 ");
 			// ループの先頭 [ を見つける
@@ -1114,7 +1119,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	// 常駐波形音程補正
 	memcpy(ram+0x1A00, asd.sbrr_tune, 16);
 	// 効果音シーケンス等
-//	memcpy(ram+0x2C00, asd.eseq, asd.eseq_size); // 使用しない
+//	memcpy(ram+0x2C00, asd.eseq, asd.eseq_size); // 効果音コマンドがある
 
 	// 音程補正、ADSR埋め込み
 	int i;
