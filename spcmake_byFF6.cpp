@@ -268,6 +268,7 @@ public:
 	bool f_brr_echo_overcheck;
 	uint16 echo_depth;
 	bool f_surround; // 逆位相サラウンド
+	bool f_eseq_out; // 効果音シーケンスを埋め込む
 
 	FF6_SPC()
 	{
@@ -284,6 +285,7 @@ public:
 		f_brr_echo_overcheck = false;
 		echo_depth = 5;
 		f_surround = false;
+		f_eseq_out = true;
 	}
 	~FF6_SPC()
 	{
@@ -506,6 +508,7 @@ int spcmake_byFF6::formatter(void)
 			}
 			// BRRオフセット
 			if(str.substr(p, 11)=="#brr_offset"){
+				spc.f_eseq_out = false;
 				int sp = skip_space(str, p+11);
 				int ep = term_end(str, sp);
 				if(str.substr(sp, ep-sp)=="auto"){
@@ -823,7 +826,7 @@ int spcmake_byFF6::formatter(void)
 		}
 		/*
 		// ジャンプの処理
-		if((str.substr(p, 4)=="jump" || str.substr(p, 4)=="goto") && !isalnum(str[p-1]) && !isalnum(str[p+4])){
+		if(str.substr(p, 4)=="jump" && !isalnum(str[p-1]) && !isalnum(str[p+4])){
 			int sp = skip_space(str, p+4);
 			int ep = term_end(str, sp);
 			string label = str.substr(sp, ep-sp);
@@ -1132,10 +1135,8 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	// 常駐波形音程補正
 	memcpy(ram+0x1A00, asd.sbrr_tune, 16);
 	// 効果音シーケンス等
-	bool f_eseq_out = false;
-	if(spc.brr_offset==0x4800){ // 20200820 オフセット調整無しなら埋め込む
+	if(spc.f_eseq_out){ // 20200820 オフセット調整無しなら埋め込む
 		memcpy(ram+0x2C00, asd.eseq, asd.eseq_size); // 効果音コマンドがある
-		f_eseq_out = true;
 	}
 
 	// 音程補正、ADSR埋め込み
@@ -1184,7 +1185,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 		delete[] ram;
 		return -1;
 	}
-	if(f_eseq_out && seq_adrs_end >= 0x2C00){
+	if(spc.f_eseq_out && seq_adrs_end >= 0x2C00){
 		printf("Error : シーケンスが効果音シーケンスと重なっています.\n");
 		delete[] ram;
 		return -1;
