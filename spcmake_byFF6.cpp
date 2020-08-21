@@ -799,19 +799,20 @@ int spcmake_byFF6::formatter(void)
 			int sp = skip_space(str, p+1);
 			int ep = num_end(str, sp);
 			int loop_count = atoi(str.substr(sp, ep-sp).c_str());
+			// "]" → "E3 "
 			str.replace(p, ep-p, "E3 ");
 			// ループの先頭 [ を見つける
 			int break_dest = 0;
 			int lp = p;
 			for(lp=sp; lp>=0; lp--){
 				if(str[lp]=='[') break;
-				// ループ中のブレイク処理
+				// ループ中の条件ジャンプ処理
 				if(str[lp]=='|'){
 					str.insert(p+3, "break_dest ");
 					sprintf(buf, "F5 %02X break_src ", (uint8)loop_count);
 					str.replace(lp, 1, buf);
-					// "E3 " + "break_dest " + "F5 XX break_src "
-					break_dest = 3 + 11 + 16;
+					// "|" → "F5 XX break_src " + "break_dest "
+					break_dest = (16-1) + 11;
 				}
 			}
 			if(lp==-1){
@@ -821,7 +822,7 @@ int spcmake_byFF6::formatter(void)
 			// "[" → "E2 02 "
 			sprintf(buf, "E2 %02X ", (uint8)(loop_count-1));
 			str.replace(lp, 1, buf);
-			p += (6-1) + (break_dest-1);
+			p += (6-1) + (3-1) + break_dest;
 			continue;
 		}
 		/*
@@ -869,7 +870,7 @@ int spcmake_byFF6::formatter(void)
 	// 最後に#track_end_markを付加
 	str.insert(p, "#9", 2);
 
-// フォーマット処理したものを出力
+// フォーマット処理したものをテスト出力
 //FILE *fp=fopen("sample_debug.txt","w");fprintf(fp,str.c_str());fclose(fp);
 
 	return 0;
@@ -944,10 +945,10 @@ int spcmake_byFF6::get_sequence(void)
 		}
 		// F5コマンドの処理
 		// F5 01 break_src  XX XX XX E3 break_dest 
-		if(seq_size>1 && seq[seq_size-2]==0xF5 && str.substr(p, 9)=="break_src"){
+		if(seq_size>=2 && seq[seq_size-2]==0xF5 && str.substr(p, 9)=="break_src"){
 			int jp = 2; // F5からの相対アドレス、2で合う
 			int lp;
-			for(lp=p+8; str[lp]!='#'; lp++){
+			for(lp=p+9; str[lp]!='#'; lp++){
 				if(str.substr(lp, 10)=="break_dest"){
 					str.erase(lp, 10); // break_dest削除
 					// break先相対値を入れておく(必須)
@@ -1386,7 +1387,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 
 int main(int argc, char *argv[])
 {
-	printf("[ spcmake_byFF6 ver.20200820 ]\n\n");
+	printf("[ spcmake_byFF6 ver.20200821 ]\n\n");
 
 #ifdef _DEBUG
 	argc = 5;
