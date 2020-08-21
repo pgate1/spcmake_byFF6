@@ -194,7 +194,7 @@ for(i=0; i<FF6_BRR_NUM; i++){
 	memcpy(eseq, rom+0x5205E, eseq_size);
 //uint8 buf[0x2C00];memset(buf,0x00,0x2C00);
 //FILE *fp=fopen("out.bin","wb");fwrite(buf,1,0x2C00,fp);fwrite(effect_seq,1,size,fp);fclose(fp);
-	/*
+/*
 {
 system("mkdir effect");
 int pass = 0;
@@ -1100,6 +1100,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	uint8 *ram = new uint8[0x10000];
 	memset(ram, 0x00, 0x10000);
 	ram[0x00A6] = 0xFF; // プログラム関連?
+	ram[0x00A8] = 0xFF; // 効果音関連
 	ram[0x00C4] = 0x10; // プログラム関連?
 	ram[0x00C6] = 0xFF; // プログラム関連?
 	ram[0x00F1] = 0x07; // ctrl
