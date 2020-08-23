@@ -11,6 +11,7 @@
 #include<string>
 #include<map>
 #include<vector>
+#include<set>
 using namespace std;
 
 typedef unsigned char  uint8;
@@ -53,6 +54,7 @@ public:
 			brr[i] = NULL;
 		}
 	}
+
 	~FF6_AkaoSoundDriver()
 	{
 		if(driver!=NULL) delete[] driver;
@@ -195,6 +197,7 @@ for(i=0; i<FF6_BRR_NUM; i++){
 //uint8 buf[0x2C00];memset(buf,0x00,0x2C00);
 //FILE *fp=fopen("out.bin","wb");fwrite(buf,1,0x2C00,fp);fwrite(effect_seq,1,size,fp);fclose(fp);
 /*
+// 効果音シーケンス出力テスト
 {
 system("mkdir effect");
 int pass = 0;
@@ -263,12 +266,13 @@ public:
 
 	uint16 track_loop[8]; // 0xF6 0xFFFFの場合はトラックループなし
 	vector<uint16> break_point[8]; // 0xF5
+	vector<uint16> jump_point[8]; // 0xF6
 
 	uint16 brr_offset;
 	bool f_brr_echo_overcheck;
 	uint16 echo_depth;
 	bool f_surround; // 逆位相サラウンド
-	bool f_eseq_out; // 効果音シーケンスを埋め込む
+	bool f_eseq_out; // 効果音シーケンス埋め込み
 
 	FF6_SPC()
 	{
@@ -287,6 +291,7 @@ public:
 		f_surround = false;
 		f_eseq_out = true;
 	}
+
 	~FF6_SPC()
 	{
 		int i;
@@ -309,7 +314,7 @@ public:
 	int read_mml(const char *mml_fname);
 	int formatter(void);
 	int get_sequence(void);
-	int get_ticks(uint8 *seq);
+	int get_ticks(int track);
 	int make_spc(const char *spc_fname);
 };
 
@@ -346,6 +351,12 @@ int term_end(const string &str, int p)
 	return p;
 }
 
+int term_begin(const string &str, int p)
+{
+	while(str[p]!=' ' && str[p]!='\t' && str[p]!='\r' && str[p]!='\n' && str[p]!='\0') p--;
+	return p;
+}
+
 int num_end(const string &str, int p)
 {
 	while(isdigit(str[p])) p++;
@@ -368,6 +379,15 @@ int get_hex(const string &str, int p)
 	int hex;
 	sscanf(buf, "%02x", &hex);
 	return hex;
+}
+
+int is_space(const char c)
+{
+// isspace() 0x20 0x09 0x0D 0x0A     0x0B 0x0C
+	if(c==' ' || c=='\t' || c=='\r' || c=='\n' || c=='\0'){
+		return 1;
+	}
+	return 0;
 }
 
 int is_cmd(const char c)
@@ -407,8 +427,12 @@ int spcmake_byFF6::formatter(void)
 //{FILE *fp=fopen("sample_debug.txt","w");fprintf(fp,str.c_str());fclose(fp);}
 
 	char buf[1024];
+	int track_num = 0;
 	map<string, FF6_TONE> tone_map;
 	int brr_id = 0;
+	bool f_octave_swap = false;
+	set<string> label_set;
+	map<string, int> label_map;
 
 	int p;
 	for(p=0; str[p]!='\0'; p++){
@@ -416,7 +440,9 @@ int spcmake_byFF6::formatter(void)
 			line++;
 		//	printf("line %d %s\n", line, str.c_str()+p+1);getchar();
 		}
+
 		if(str[p]=='#'){
+
 			// 曲名の取得
 			if(str.substr(p, 9)=="#songname"){
 				int sp = str.find('"', p+9) + 1;
@@ -430,6 +456,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// ゲーム名の取得
 			if(str.substr(p, 10)=="#gametitle"){
 				int sp = str.find('"', p+10) + 1;
@@ -443,6 +470,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// 作曲者の取得
 			if(str.substr(p, 7)=="#artist"){
 				int sp = str.find('"', p+7) + 1;
@@ -456,6 +484,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// 作成者の取得
 			if(str.substr(p, 7)=="#dumper"){
 				int sp = str.find('"', p+7) + 1;
@@ -469,6 +498,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// コメントの取得
 			if(str.substr(p, 8)=="#comment"){
 				int sp = str.find('"', p+8) + 1;
@@ -482,6 +512,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// 再生時間とフェードアウト時間の設定
 			if(str.substr(p, 7)=="#length"){
 				// 再生時間
@@ -506,9 +537,13 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// BRRオフセット
 			if(str.substr(p, 11)=="#brr_offset"){
+
+				// オフセット時は効果音シーケンスは出力しない
 				spc.f_eseq_out = false;
+
 				int sp = skip_space(str, p+11);
 				int ep = term_end(str, sp);
 				if(str.substr(sp, ep-sp)=="auto"){
@@ -527,6 +562,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// BRR領域がエコーバッファに重なるのチェックを有効にする
 			if(str.substr(p, 19)=="#brr_echo_overcheck"){
 				spc.f_brr_echo_overcheck = true;
@@ -534,6 +570,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// エコー深さ指定
 			if(str.substr(p, 11)=="#echo_depth"){
 				int sp = skip_space(str, p+11);
@@ -553,6 +590,7 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// 逆位相サラウンド有効
 			if(str.substr(p, 9)=="#surround"){
 				spc.f_surround = true;
@@ -560,6 +598,15 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
+			// オクターブコマンド入れ替え
+			if(str.substr(p, 7)=="#swap<>"){
+				f_octave_swap ^= 1;
+				str.erase(p, 7);
+				p--;
+				continue;
+			}
+
 			// 波形宣言
 			if(str.substr(p, 5)=="#tone"){
 				int sp = skip_space(str, p+5); // tone指定先頭
@@ -688,11 +735,28 @@ int spcmake_byFF6::formatter(void)
 				p--;
 				continue;
 			}
+
 			// トラック番号の取得
 			if(str.substr(p, 6)=="#track"){
+
+				// 前トラックの終了処理
+				if(label_map.size()){
+					map<string, int>::iterator mit;
+					for(mit=label_map.begin(); mit!=label_map.end(); ++mit){
+						if(label_set.find(mit->first)==label_set.end()){
+							printf("Error track %d : トラック内でジャンプラベル %s がありません.\n", track_num, mit->first.c_str());
+							return -1;
+						}
+					}
+				}
+
+				// トラック初期化
+				label_set.clear(); // ジャンプ先ラベルクリア
+				label_map.clear(); // ジャンプラベルクリア
+
 				int sp = skip_space(str, p+6);
 				int ep = term_end(str, sp);
-				int track_num = atoi(str.substr(sp, ep-sp).c_str());
+				track_num = atoi(str.substr(sp, ep-sp).c_str());
 				if(!(track_num>=1 && track_num<=8)){
 					printf("Error line %d : #trackナンバーは1～8としてください.\n", line);
 					return -1;
@@ -702,6 +766,7 @@ int spcmake_byFF6::formatter(void)
 				p++;
 				continue;
 			}
+
 			// マクロ定義
 			if(str.substr(p, 6)=="#macro"){
 				// マクロ定義
@@ -721,7 +786,7 @@ int spcmake_byFF6::formatter(void)
 					if(sp==string::npos) break;
 					//printf("macro_val_line %d\n", line);
 					ep = sp + macro_key.length();
-					if((!isalnum(str[sp-1])) && (!isalnum(str[ep]))){
+					if(!isalnum(str[sp-1]) && !isalnum(str[ep])){
 						str.replace(sp, ep-sp, macro_val);
 					}
 					lp = sp + macro_val.length();
@@ -736,6 +801,7 @@ int spcmake_byFF6::formatter(void)
 			p--;
 			continue;
 		}
+
 		// 効果音埋め込み
 		if(str[p]=='@' && str[p+1]=='@'){
 			int sp = p + 2;
@@ -763,6 +829,7 @@ int spcmake_byFF6::formatter(void)
 			p--;
 			continue;
 		}
+
 		// 波形指定の取得
 		if(str[p]=='@'){ // @3 @12 @B @0C @piano
 			int sp = p + 1;
@@ -794,6 +861,7 @@ int spcmake_byFF6::formatter(void)
 			p--;
 			continue;
 		}
+
 		// ループの処理
 		if(str[p]==']'){ // ループの後ろ
 			int sp = skip_space(str, p+1);
@@ -825,18 +893,7 @@ int spcmake_byFF6::formatter(void)
 			p += (6-1) + (3-1) + break_dest;
 			continue;
 		}
-		/*
-		// ジャンプの処理
-		if(str.substr(p, 4)=="jump" && !isalnum(str[p-1]) && !isalnum(str[p+4])){
-			int sp = skip_space(str, p+4);
-			int ep = term_end(str, sp);
-			string label = str.substr(sp, ep-sp);
-		//	printf("[%s]\n", label.c_str());getchar();
-			sprintf(buf, "jump_src_%s ", label.c_str());
-			str.replace(p, ep-p, buf);
-			p += strlen(buf) -1;
-			continue;
-		}*/
+
 		// 10進数から16進数に変換
 		if(str[p]=='d'){
 			int sp = p + 1;
@@ -847,28 +904,94 @@ int spcmake_byFF6::formatter(void)
 			p--;
 			continue;
 		}
+
 		// オクターブ操作
 		if(str[p]=='>'){
-			sprintf(buf, "D7");
+			if(f_octave_swap) sprintf(buf, "D8"); // オクターブ -1
+			else sprintf(buf, "D7"); // オクターブ +1
 			str.replace(p, 1, buf);
 			p++;
 			continue;
 		}
 		if(str[p]=='<'){
-			sprintf(buf, "D8");
+			if(f_octave_swap) sprintf(buf, "D7"); // オクターブ +1
+			else sprintf(buf, "D8"); // オクターブ -1
 			str.replace(p, 1, buf);
 			p++;
 			continue;
 		}
+
+		// トラックループ
+		if(str[p]=='L' && is_space(str[p-1]) && is_space(str[p+1])){
+			continue;
+		}
+
 		// コンバート終了
 		if(str[p]=='!'){
 			str.erase(p);
 			break;
 		}
+
+		// ジャンプの処理
+		if(str[p]=='J' && is_space(str[p-1]) && is_space(str[p+1])){
+			int sp = skip_space(str, p+1);
+			int ep = term_end(str, sp);
+			string label_str = str.substr(sp, ep-sp);
+		//	printf("[%s]\n", label_str.c_str());getchar();
+			int label_num;
+			if(label_map.find(label_str)==label_map.end()){
+				label_num = label_map.size() + 1;
+				label_map[label_str] = label_num;
+			}
+			else{
+				label_num = label_map[label_str];
+			}
+			sprintf(buf, "F6 jump_src_%d%d ", track_num, label_num);
+			str.replace(p, ep-p, buf);
+			p += 15 -1;
+		//	str.insert(p,"p");
+			continue;
+		}
+		if(str[p]==':'){ // jump dst
+			int ep = p + 1;
+			int sp = term_begin(str, p-1) +1;
+			string label_str = str.substr(sp, ep-sp-1);
+		//	printf("[%s] %d\n", label_str.c_str(), ep-sp-1);getchar();
+			if(label_set.find(label_str)!=label_set.end()){
+				printf("Error line %d : ジャンプラベル %s はすでに定義されています.\n", line, label_str.c_str());
+				return -1;
+			}
+			label_set.insert(label_str);
+			int label_num;
+			if(label_map.find(label_str)==label_map.end()){
+				label_num = label_map.size() + 1;
+				label_map[label_str] = label_num;
+			}
+			else{
+				label_num = label_map[label_str];
+			}
+			sprintf(buf, "jump_dst_%d%d ", track_num, label_num);
+			str.replace(sp, ep-sp, buf);
+			p += -(ep-sp-1) + 12 -1;
+		//	str.insert(p,"p");
+			continue;
+		}
+
+	}
+
+	// トラック8の終了処理
+	if(label_map.size()){
+		map<string, int>::iterator mit;
+		for(mit=label_map.begin(); mit!=label_map.end(); ++mit){
+			if(label_set.find(mit->first)==label_set.end()){
+				printf("Error track %d : トラック内でジャンプラベル %s がありません.\n", track_num, mit->first.c_str());
+				return -1;
+			}
+		}
 	}
 
 	// 最後に#track_end_markを付加
-	str.insert(p, "#9", 2);
+	str.insert(p, "#9");
 
 // フォーマット処理したものをテスト出力
 //FILE *fp=fopen("sample_debug.txt","w");fprintf(fp,str.c_str());fclose(fp);
@@ -887,6 +1010,9 @@ int spcmake_byFF6::get_sequence(void)
 	int track_num = 0;
 	int seq_id = -1;
 
+	multimap<int, int> jump_src_map[8];
+	map<int, int> jump_dst_map[8];
+
 	int p;
 	for(p=0; str[p]!='\0'; p++){
 		if(seq_size>=SEQ_SIZE_MAX){
@@ -894,6 +1020,7 @@ int spcmake_byFF6::get_sequence(void)
 			return -1;
 		}
 		if(str[p]=='\n') line++;
+
 		if(str[p]=='#'){
 			//printf("t%d\n", track_num);
 			// トラックの終了
@@ -933,6 +1060,7 @@ int spcmake_byFF6::get_sequence(void)
 			continue;
 		}
 		if(track_num==0) continue;
+
 		// トラックループの検出
 		if(str[p]=='L'){
 			if(spc.track_loop[seq_id]!=0xFFFF){ // すでに L があった
@@ -943,6 +1071,7 @@ int spcmake_byFF6::get_sequence(void)
 			spc.track_loop[seq_id] = seq_size;
 			continue;
 		}
+
 		// F5コマンドの処理
 		// F5 01 break_src  XX XX XX E3 break_dest 
 		if(seq_size>=2 && seq[seq_size-2]==0xF5 && str.substr(p, 9)=="break_src"){
@@ -951,7 +1080,7 @@ int spcmake_byFF6::get_sequence(void)
 			for(lp=p+9; str[lp]!='#'; lp++){
 				if(str.substr(lp, 10)=="break_dest"){
 					str.erase(lp, 10); // break_dest削除
-					// break先相対値を入れておく(必須)
+					// break先相対値を入れておく
 					char buf[10];
 					sprintf(buf, "%02X %02X ", (uint8)jp, (uint8)(jp>>8));
 					str.replace(p, 9, buf); // break_src置き換え
@@ -966,6 +1095,27 @@ int spcmake_byFF6::get_sequence(void)
 			p--;
 			continue;
 		}
+
+		// ジャンプの前処理
+		if(str.substr(p, 5)=="jump_"){
+			if(str.substr(p+5, 4)=="src_"){ // jump_src_NN
+				int jump_id = atoi(str.substr(p+9, 2).c_str());
+				jump_src_map[seq_id].insert(make_pair<int,int>(jump_id, seq_size));
+				str.insert(p+11, "00 00 ");
+				str.erase(p, 11);
+				p--;
+				continue;
+			}
+			if(str.substr(p+5, 4)=="dst_"){ // jump_dst_NN
+				int jump_id = atoi(str.substr(p+9, 2).c_str());
+				jump_dst_map[seq_id][jump_id] = seq_size;
+				str.erase(p, 11);
+				p--;
+				continue;
+			}
+		}
+
+		// 制御コマンド処理
 		if(is_cmd(str[p])){
 			seq[seq_size++] = get_hex(str, p);
 		//	printf("0x%02X ",get_hex(str, p));getchar();
@@ -974,8 +1124,20 @@ int spcmake_byFF6::get_sequence(void)
 		}
 	}
 
-	// trackがないならシーケンス終了を置いておく
+	// ジャンプの後処理
 	int t;
+	for(t=0; t<8; t++){
+		// jump_srcの位置に相対ジャンプ値を入れる
+		multimap<int, int>::iterator mit;
+		for(mit=jump_src_map[t].begin(); mit!=jump_src_map[t].end(); ++mit){
+			// jump_rel = jump_dst - jump_src
+			*(uint16*)(spc.seq[t] + mit->second) = jump_dst_map[t][mit->first] - mit->second;
+			// pointにjump_srcの位置を入れる
+			spc.jump_point[t].push_back(mit->second);
+		}
+	}
+
+	// trackがないならシーケンス終了を置いておく
 	for(t=0; t<8; t++){
 		if(spc.seq_size[t]==0){
 			spc.seq[t] = new uint8[1];
@@ -1000,8 +1162,10 @@ int spcmake_byFF6::get_sequence(void)
 	return 0;
 }
 
-int spcmake_byFF6::get_ticks(uint8 *seq)
+int spcmake_byFF6::get_ticks(int track)
 {
+	const uint8 *seq = spc.seq[track];
+
 	int tick = 0;
 
 	int ticks[14] = {192, 96, 64, 72, 48, 32, 36, 24, 16, 12, 8, 6, 4, 3};
@@ -1009,7 +1173,7 @@ int spcmake_byFF6::get_ticks(uint8 *seq)
 	int length[64] = { // 0xC0-0xFF
 		1, 1, 1, 1, 2, 3, 2, 3, 3, 4, 1, 4, 1, 3, 1, 2,
 		1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 2, 2, 2, 2, 2,
-		2, 1, 2, 1, 1, 1, 1, 1, 2, (1), (1), 1, 1, 1, 1, 1,
+		2, 1, 2, 1, 1, 1, 1, 1, 2, (2), (2), 1, 1, 1, 1, 1,
 		2, 3, 2, 3, 2, 4, 3, 3, 3, (1), (1), 1, 3, 1, 1, 1
 	};
 
@@ -1035,7 +1199,10 @@ int spcmake_byFF6::get_ticks(uint8 *seq)
 		else if(c==0xE3){ // ループ終了
 			loop_depth--;
 		}
-		else if(c==0xEB || c==0xF6){ // 終了、ジャンプ
+		else if(c==0xF6 && (p+3)==spc.seq_size[track]){ // トラックループ
+			break;
+		}
+		else if(c==0xEB){ // 終了
 			break;
 		}
 		p += length[c-0xC0];
@@ -1137,7 +1304,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	// 常駐波形音程補正
 	memcpy(ram+0x1A00, asd.sbrr_tune, 16);
 	// 効果音シーケンス等
-	if(spc.f_eseq_out){ // 20200820 オフセット調整無しなら埋め込む
+	if(spc.f_eseq_out){ // BRRオフセット調整無しなら埋め込む
 		memcpy(ram+0x2C00, asd.eseq, asd.eseq_size); // 効果音コマンドがある
 	}
 
@@ -1214,13 +1381,15 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	}
 	*(uint16*)(ram+0x1C02) = seq_rom_adrs_end; // シーケンスアドレスエンド+1を指す
 
-	// トラックループアドレス埋め込み
-	// F6 XX XX
+	// ジャンプ制御関連
 	{
 	int t, i;
+
+	// トラックループアドレス埋め込み
+	// F6 XX XX
 	for(t=0; t<8; t++){
 	//	printf("seq%d_size %d\n", t, spc.seq_size[t]);
-		if(spc.track_loop[t]!=0xFFFF){
+		if(spc.track_loop[t]!=0xFFFF){ // Lがある場合
 			for(i=spc.seq_size[t]-1; i>=0; i--){
 				// トラック最後のF6に対してのみループアドレスを調整
 				if(spc.seq[t][i]==0xF6){
@@ -1233,6 +1402,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 			}
 		}
 	}
+
 	// ループブレイクジャンプ埋め込み
 	// F5 NN XX XX
 	for(t=0; t<8; t++){
@@ -1244,6 +1414,18 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 			*(uint16*)(ram+seq_adrs[t]+spc.break_point[t][i]) = jump_adrs;
 		}
 	}
+
+	// ジャンプアドレス埋め込み
+	// F6 XX XX
+	for(t=0; t<8; t++){
+		for(i=0; i<spc.jump_point[t].size(); i++){
+		//	printf("jump_rel %d  %d + %d\n", i, spc.jump_point[t][i], *(uint16*)(spc.seq[t]+spc.jump_point[t][i]));
+			uint16 jump_adrs = seq_rom_adrs[t] + spc.jump_point[t][i] + *(uint16*)(spc.seq[t]+spc.jump_point[t][i]);
+		//	printf("jump_adrs 0x%04X\n", jump_adrs);
+			*(uint16*)(ram+seq_adrs[t]+spc.jump_point[t][i]) = jump_adrs;
+		}
+	}
+
 	}
 
 	// 常駐波形BRR埋め込み、デフォルトは0x4800
@@ -1388,7 +1570,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 
 int main(int argc, char *argv[])
 {
-	printf("[ spcmake_byFF6 ver.20200821 ]\n\n");
+	printf("[ spcmake_byFF6 ver.20200823 ]\n\n");
 
 #ifdef _DEBUG
 	argc = 5;
@@ -1478,11 +1660,11 @@ int main(int argc, char *argv[])
 	}
 
 	if(f_ticks){
+		printf("\n");
 		int i;
 		for(i=0; i<8; i++){
-			printf("  track%d %6d ticks\n", i+1, spcmakeff6.get_ticks(spcmakeff6.spc.seq[i]));
+			printf("  track%d %6d ticks\n", i+1, spcmakeff6.get_ticks(i));
 		}
-		printf("\n");
 		getchar();
 	}
 
