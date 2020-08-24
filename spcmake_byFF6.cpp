@@ -423,8 +423,12 @@ int spcmake_byFF6::formatter(void)
 		if(ep==string::npos) break;
 		str.erase(sp, ep-sp);
 	}
-	
+
 //{FILE *fp=fopen("sample_debug.txt","w");fprintf(fp,str.c_str());fclose(fp);}
+
+	#define _MML_END_ "#track ;"
+	// 最後に _MML_END_ を付加
+	str.insert(str.length(), "\n"_MML_END_" ");
 
 	char buf[1024];
 	int track_num = 0;
@@ -750,6 +754,12 @@ int spcmake_byFF6::formatter(void)
 					}
 				}
 
+				// #track ; → #9
+				if(str.substr(p, strlen(_MML_END_))==_MML_END_){
+					str.replace(p, strlen(_MML_END_), "#9");
+					break;
+				}
+
 				// トラック初期化
 				label_set.clear(); // ジャンプ先ラベルクリア
 				label_map.clear(); // ジャンプラベルクリア
@@ -926,12 +936,6 @@ int spcmake_byFF6::formatter(void)
 			continue;
 		}
 
-		// コンバート終了
-		if(str[p]=='!'){
-			str.erase(p);
-			break;
-		}
-
 		// ジャンプの処理
 		if(str[p]=='J' && is_space(str[p-1]) && is_space(str[p+1])){
 			int sp = skip_space(str, p+1);
@@ -977,21 +981,13 @@ int spcmake_byFF6::formatter(void)
 			continue;
 		}
 
-	}
-
-	// トラック8の終了処理
-	if(label_map.size()){
-		map<string, int>::iterator mit;
-		for(mit=label_map.begin(); mit!=label_map.end(); ++mit){
-			if(label_set.find(mit->first)==label_set.end()){
-				printf("Error track %d : トラック内でジャンプラベル %s がありません.\n", track_num, mit->first.c_str());
-				return -1;
-			}
+		// コンバート終了
+		if(str[p]=='!'){
+			str.replace(p, 1, "\n"_MML_END_" ");
+			p--;
+			continue;
 		}
 	}
-
-	// 最後に#track_end_markを付加
-	str.insert(p, "#9");
 
 // フォーマット処理したものをテスト出力
 //FILE *fp=fopen("sample_debug.txt","w");fprintf(fp,str.c_str());fclose(fp);
