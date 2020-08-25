@@ -323,7 +323,7 @@ int spcmake_byFF6::read_mml(const char *mml_fname)
 	// シーケンスファイル読み込み
 	FILE *fp = fopen(mml_fname, "r");
 	if(fp==NULL){
-		printf("MMLファイル %s が開けません.\n", mml_fname);
+		printf("HexMMLファイル %s が開けません.\n", mml_fname);
 		return -1;
 	}
 	char buf[1024];
@@ -1291,7 +1291,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	// ベースアドレス
 	// romベースからapu_ramベースに変更しても問題なさそう
 	*(uint16*)(ram+0x1C00) = 0x1C24;//0x8401;
-	
+
 	// ドライバ
 	memcpy(ram+0x0200, asd.driver, asd.driver_size);
 

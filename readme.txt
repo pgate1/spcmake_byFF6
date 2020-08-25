@@ -3,7 +3,7 @@
                                  　　　　      by pgate1
 
 FF6サウンドドライバやFF6波形を使ってSPCを生成します。
-MMLはFF6サウンドドライバ向けに特化したものです。
+HexMMLはFF6サウンドドライバ向けに特化したものです。
 
 ※警告
 生成されるSPCにはFF6のサウンドドライバや波形データが含まれています。
@@ -15,7 +15,7 @@ SPCデータを容易に公開されることはご遠慮ください。
 ご自身でFF6カートリッジからFinalFantasy6.romをダンプする。
 FinalFantasy6.romをspcmake_byFF6.exeと同じ場所に置く。
 必要であれば.brrを用意する。
-sample.txt のようなMMLを書く。
+sample.txt のようなHexMMLを書く。
 spcmake_byFF6.batをダブルクリック。
 エラーが無ければsample.spcが生成される。
 
