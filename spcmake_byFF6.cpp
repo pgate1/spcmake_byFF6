@@ -239,6 +239,8 @@ printf("pass %d\n", pass);getchar();
 
 struct FF6_TONE {
 	string brr_fname;
+	bool used; // formatter only
+	int line; // formatter only
 	int brr_id; // formatter only
 	int inst_id; // 常駐波形 only
 	uint8 octave; // formatter only
@@ -615,13 +617,14 @@ int spcmake_byFF6::formatter(void)
 			if(str.substr(p, 5)=="#tone"){
 				int sp = skip_space(str, p+5); // tone指定先頭
 				int ep = term_end(str, sp);
-				string tone_num = str.substr(sp, ep-sp);
-				if(tone_map.find(tone_num)!=tone_map.end()){
-					printf("Error line %d : #tone %s はすでに宣言されています.\n", line, tone_num.c_str());
+				string tone_id = str.substr(sp, ep-sp);
+				if(tone_map.find(tone_id)!=tone_map.end()){
+					printf("Error line %d : #tone %s はすでに宣言されています.\n", line, tone_id.c_str());
 					return -1;
 				}
 				// 常駐波形でもオクターブ・トランスポーズ・ディチューン設定するから追加
-				tone_map[tone_num]; // tone追加
+				tone_map[tone_id].used = false; // tone追加
+				tone_map[tone_id].line = line;
 
 				// brr_fnameの取得
 				sp = skip_space(str, ep) + 1;
@@ -641,7 +644,7 @@ int spcmake_byFF6::formatter(void)
 						printf("Error line %d : FF6inst 常駐波形指定は s0～s7 としてください.\n", line);
 						return -1;
 					}
-					tone_map[tone_num].inst_id = inst_id;
+					tone_map[tone_id].inst_id = inst_id;
 				}
 				else{
 					struct stat st;
@@ -662,7 +665,7 @@ int spcmake_byFF6::formatter(void)
 					}
 					spc.brr_map[brr_id].brr_fname = brr_fname;
 				}
-				tone_map[tone_num].brr_fname = brr_fname;
+				tone_map[tone_id].brr_fname = brr_fname;
 
 				// パラメータ取得、#toneは一行で記述すること
 				uint8 param[8];
@@ -680,14 +683,14 @@ int spcmake_byFF6::formatter(void)
 				if(brr_fname.substr(0,8)=="FF6inst:"){
 					if(param_num==0){
 						// 無指定
-						tone_map[tone_num].octave = 0xFF; // D6 D9 DB を出力しない
-						tone_map[tone_num].transpose = 0;
-						tone_map[tone_num].detune = 0;
+						tone_map[tone_id].octave = 0xFF; // D6 D9 DB を出力しない
+						tone_map[tone_id].transpose = 0;
+						tone_map[tone_id].detune = 0;
 					}
 					else if(param_num==3){
-						tone_map[tone_num].octave = param[0];
-						tone_map[tone_num].transpose = param[1];
-						tone_map[tone_num].detune = param[2];
+						tone_map[tone_id].octave = param[0];
+						tone_map[tone_id].transpose = param[1];
+						tone_map[tone_id].detune = param[2];
 					}
 					else{
 						printf("Error line %d : FF6波形指定の場合のパラメータ数は0個か3個です.\n", line);
@@ -696,9 +699,9 @@ int spcmake_byFF6::formatter(void)
 				}
 				else{ // brrファイル指定の場合
 					if(param_num==7){
-						tone_map[tone_num].octave = param[0];
-						tone_map[tone_num].transpose = param[1];
-						tone_map[tone_num].detune = param[2];
+						tone_map[tone_id].octave = param[0];
+						tone_map[tone_id].transpose = param[1];
+						tone_map[tone_id].detune = param[2];
 						// adsr(DD DE DF E0)、パラメータは16進数
 						uint8 *adsr = param + 3;
 						if(!(adsr[0]>=0 && adsr[0]<=0xF)){
@@ -730,7 +733,7 @@ int spcmake_byFF6::formatter(void)
 
 				// 常駐波形の場合はbrr_idは使わない
 				if(!f_stayinst){
-					tone_map[tone_num].brr_id = brr_id;
+					tone_map[tone_id].brr_id = brr_id;
 					brr_id++;
 				}
 
@@ -844,27 +847,28 @@ int spcmake_byFF6::formatter(void)
 		if(str[p]=='@'){ // @3 @12 @B @0C @piano
 			int sp = p + 1;
 			int ep = term_end(str, sp);
-			string tone_num = str.substr(sp, ep-sp);
-			if(tone_map.find(tone_num)==tone_map.end()){
-				printf("Error line %d : @%s 定義されていません.\n", line, tone_num.c_str());
+			string tone_id = str.substr(sp, ep-sp);
+			if(tone_map.find(tone_id)==tone_map.end()){
+				printf("Error line %d : @%s 定義されていません.\n", line, tone_id.c_str());
 				return -1;
 			}
+			tone_map[tone_id].used = true;
 			// ADSRは別のところに埋め込む
 			// octaveが0xFFなら生成しない
 			char buf_octave[10], buf_transpose[10], buf_detune[10];
-			if(tone_map[tone_num].brr_fname.substr(0,8)=="FF6inst:" && tone_map[tone_num].octave==0xFF){
+			if(tone_map[tone_id].brr_fname.substr(0,8)=="FF6inst:" && tone_map[tone_id].octave==0xFF){
 				sprintf(buf_octave, "");
 				sprintf(buf_transpose, "");
 				sprintf(buf_detune, "");
 			}
 			else{
-				sprintf(buf_octave, "D6 %02X", tone_map[tone_num].octave);
-				sprintf(buf_transpose, "D9 %02X", tone_map[tone_num].transpose);
-				sprintf(buf_detune, "DB %02X", tone_map[tone_num].detune);
+				sprintf(buf_octave, "D6 %02X", tone_map[tone_id].octave);
+				sprintf(buf_transpose, "D9 %02X", tone_map[tone_id].transpose);
+				sprintf(buf_detune, "DB %02X", tone_map[tone_id].detune);
 			}
 			sprintf(buf, "DC %02X %s %s %s ",
-				(tone_map[tone_num].brr_fname.substr(0,9)=="FF6inst:s")
-					? tone_map[tone_num].inst_id : (0x20 + tone_map[tone_num].brr_id),
+				(tone_map[tone_id].brr_fname.substr(0,9)=="FF6inst:s")
+					? tone_map[tone_id].inst_id : (0x20 + tone_map[tone_id].brr_id),
 				buf_octave, buf_transpose, buf_detune
 				);
 			str.replace(p, ep-p, buf);
@@ -986,6 +990,15 @@ int spcmake_byFF6::formatter(void)
 			str.replace(p, 1, "\n"_MML_END_" ");
 			p--;
 			continue;
+		}
+	}
+
+	// 未使用toneの警告
+	map<string, FF6_TONE>::iterator mit;
+	for(mit=tone_map.begin(); mit!=tone_map.end(); ++mit){
+		if(mit->second.used==false){
+			printf("Warning line %d : #tone %s \"%s\" は使用されていません.\n", mit->second.line, mit->first.c_str(), mit->second.brr_fname.c_str());
+			getchar();
 		}
 	}
 
@@ -1566,7 +1579,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 
 int main(int argc, char *argv[])
 {
-	printf("[ spcmake_byFF6 ver.20200823 ]\n\n");
+	printf("[ spcmake_byFF6 ver.20200919 ]\n\n");
 
 #ifdef _DEBUG
 	argc = 5;
