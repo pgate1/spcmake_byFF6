@@ -12,16 +12,21 @@
 //#echo_depth 7 // デフォルトは5
 //#surround // 逆位相サラウンド有効
 //#swap<> // オクターブコマンドの入れ替え
+//#auto_assign_toneid // tone_id省略時に自動割り当て
 
 ////////////////////////////////////////////////////////////////////////
-// tone番号 "brrファイルパス" D6 D9 DB  DD DE DF E0 (各パラメータは16進数で)
-//#tone 32 "brr/ff6_1A.brr" 07 00 00 0F 07 07 10 // ハープ
-// FF6波形の使用(00～3E) D6 D9 DB (もしくはパラメータ指定なし)
-//#tone 32 "FF6inst:1A" 07 00 00
+/*
+#tone tone_id "brrファイルパス" D6 D9 DB  DD DE DF E0 (各パラメータは16進数で)
+#tone 32 "brr/ff6_1A.brr" 07 00 00 0F 07 07 10 // ハープ
+FF6波形の使用(00～3E) D6 D9 DB (もしくはパラメータ指定なし)
+#tone 32 "FF6inst:1A" 07 00 00
 #tone 32 "FF6inst:1A"
-// FF6常駐波形の使用(s0～s7) D6 D9 DB (もしくはパラメータ指定なし)
-//#tone 32 "FF6inst:s3" 07 00 00
-//#tone 32 "FF6inst:s5"
+FF6常駐波形の使用(s0～s7) D6 D9 DB (もしくはパラメータ指定なし)
+#tone 32 "FF6inst:s3" 07 00 00
+#tone 32 "FF6inst:s5"
+#tone notuse "FF6inst:11"
+#tone "FF6inst:04"
+*/
 
 #track 1
 
@@ -33,7 +38,8 @@ F2 32 // エコーボリューム
 C4 A0 // 音量
 D4 // エコーオン
 
-@32 // 波形選択
+#tone 33 "FF6inst:1A"
+@33 // 波形選択
 C6 50 // パン
 D6 07 // オクターブ
 
