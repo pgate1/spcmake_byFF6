@@ -94,7 +94,7 @@ int FF6_AkaoSoundDriver::get_akao(const char *rom_fname)
 		printf("FF6のromにヘッダが付いているようです？\n");
 		return -1;
 	}
-	if(!(rom[0x0FFC0]=='F' && rom[0x0FFC6]=='F' && rom[0x0FFCE]=='6')){
+	if(!(rom[0x0FFC0]=='F' && rom[0x0FFC6]=='F' && (rom[0x0FFCE]=='6' || rom[0x0FFCE]=='3'))){
 		delete[] rom;
 		printf("FF6のromではない？\n");
 		return -1;
@@ -1602,7 +1602,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 
 int main(int argc, char *argv[])
 {
-	printf("[ spcmake_byFF6 ver.20201003 ]\n\n");
+	printf("[ spcmake_byFF6 ver.20210109 ]\n\n");
 
 #ifdef _DEBUG
 	argc = 5;
