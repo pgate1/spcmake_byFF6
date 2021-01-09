@@ -1,8 +1,9 @@
 /*
 	spcmake_byFF6
-	Copyright (c) 2020 pgate1
+	Copyright (c) 2020-2021 pgate1
 */
 
+#pragma warning( disable : 4996 )
 #include<stdio.h>
 #include<memory.h>
 #include<sys/stat.h>
@@ -27,11 +28,11 @@ public:
 	uint8 *driver;
 
 	// 効果音シーケンス
-	uint32 eseq_size;
+	uint16 eseq_size;
 	uint8 *eseq;
 
 	// 常駐波形
-	uint32 sbrr_size;
+	uint16 sbrr_size;
 	uint8 *sbrr;
 	uint16 sbrr_start[16]; // スタートアドレスとループアドレス
 	uint16 sbrr_tune[8];
@@ -264,7 +265,7 @@ public:
 	map<int, FF6_TONE> brr_map;
 
 	uint8 *seq[8];
-	uint32 seq_size[8];
+	uint16 seq_size[8];
 
 	uint16 track_loop[8]; // 0xF6 0xFFFFの場合はトラックループなし
 	vector<uint16> break_point[8]; // 0xF5
@@ -272,7 +273,7 @@ public:
 
 	uint16 brr_offset;
 	bool f_brr_echo_overcheck;
-	uint16 echo_depth;
+	uint8 echo_depth;
 	bool f_surround; // 逆位相サラウンド
 	bool f_eseq_out; // 効果音シーケンス埋め込み
 
@@ -430,7 +431,7 @@ int spcmake_byFF6::formatter(void)
 
 	#define _MML_END_ "#track ;"
 	// 最後に _MML_END_ を付加
-	str.insert(str.length(), "\n"_MML_END_" ");
+	str.insert(str.length(), "\n" _MML_END_ " ");
 
 	char buf[1024];
 	int track_num = 0;
@@ -699,7 +700,7 @@ int spcmake_byFF6::formatter(void)
 					if(str[sp]=='\n') break; // num==7の時ここで抜ければ正常
 					ep = sp;
 					while(str[ep]!=' ' && str[ep]!='\t' && str[ep]!='\r' && str[ep]!='\n' && str[ep]!='\0') ep++;
-					param[param_num++] = strtol(str.substr(sp, ep-sp).c_str(), NULL, 16);
+					param[param_num++] = (uint8)strtol(str.substr(sp, ep-sp).c_str(), NULL, 16);
 				}
 				//printf("pn %d\n", param_num);getchar();
 
@@ -1010,7 +1011,7 @@ int spcmake_byFF6::formatter(void)
 
 		// コンバート終了
 		if(str[p]=='!'){
-			str.replace(p, 1, "\n"_MML_END_" ");
+			str.replace(p, 1, "\n" _MML_END_ " ");
 			p--;
 			continue;
 		}
@@ -1067,7 +1068,7 @@ int spcmake_byFF6::get_sequence(void)
 				//	printf("t%d seq_size %d\n", track_num, seq_size); getchar();
 				}
 				// EBで終わってないならEBを置く
-				else if(seq[seq_size-1]!=0xEB){
+				else if(seq_size==0 || seq[seq_size-1]!=0xEB){
 					seq[seq_size++] = 0xEB;
 				}
 
@@ -1132,7 +1133,7 @@ int spcmake_byFF6::get_sequence(void)
 		if(str.substr(p, 5)=="jump_"){
 			if(str.substr(p+5, 4)=="src_"){ // jump_src_NN
 				int jump_id = atoi(str.substr(p+9, 2).c_str());
-				jump_src_map[seq_id].insert(make_pair<int,int>(jump_id, seq_size));
+				jump_src_map[seq_id].insert(pair<int, int>(jump_id, seq_size));
 				str.insert(p+11, "00 00 ");
 				str.erase(p, 11);
 				p--;
@@ -1265,7 +1266,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 
 	{
 	// バイナリフォーマット
-	int i;
+	uint32 i;
 	for(i=0; i<32 && i<spc.songname.length(); i++) header[0x2E+i] = spc.songname[i];
 	for(i=0; i<32 && i<spc.gametitle.length(); i++) header[0x4E+i] = spc.gametitle[i];
 	for(i=0; i<32 && i<spc.artist.length(); i++) header[0xB0+i] = spc.artist[i];
@@ -1319,7 +1320,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 //	dsp_reg[0x6D] = 0xCD; // ESA
 //	dsp_reg[0x7D] = 0x05; // EDL
 	// エコーバッファ領域設定
-	uint16 echobuf_start_adrs = 0xF500 - (spc.echo_depth << 11);
+	uint16 echobuf_start_adrs = 0xF500 - ((uint16)spc.echo_depth << 11);
 	dsp_reg[0x6D] = echobuf_start_adrs >> 8; // ESA
 	dsp_reg[0x7D] = spc.echo_depth; // EDL
 
@@ -1341,7 +1342,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	}
 
 	// 音程補正、ADSR埋め込み
-	int i;
+	uint32 i;
 	for(i=0; i<spc.brr_map.size(); i++){
 		if(spc.brr_map[i].brr_fname.substr(0, 8)=="FF6inst:"){
 		//	if(spc.brr_map[i].brr_fname[8]=='s') continue; // 常駐波形はADSR別途
@@ -1439,7 +1440,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	// F5 NN XX XX
 	for(t=0; t<8; t++){
 	//	printf("seq%d_size %d\n", t, spc.seq_size[t]);
-		for(i=0; i<spc.break_point[t].size(); i++){
+		for(i=0; i<(int)spc.break_point[t].size(); i++){
 		//	printf("jump_rel %d  %d + %d\n", i, spc.break_point[t][i], *(uint16*)(spc.seq[t]+spc.break_point[t][i]));
 			uint16 jump_adrs = seq_rom_adrs[t] + spc.break_point[t][i] + *(uint16*)(spc.seq[t]+spc.break_point[t][i]);
 		//	printf("jump_adrs 0x%04X\n", jump_adrs);
@@ -1450,7 +1451,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 	// ジャンプアドレス埋め込み
 	// F6 XX XX
 	for(t=0; t<8; t++){
-		for(i=0; i<spc.jump_point[t].size(); i++){
+		for(i=0; i<(int)spc.jump_point[t].size(); i++){
 		//	printf("jump_rel %d  %d + %d\n", i, spc.jump_point[t][i], *(uint16*)(spc.seq[t]+spc.jump_point[t][i]));
 			uint16 jump_adrs = seq_rom_adrs[t] + spc.jump_point[t][i] + *(uint16*)(spc.seq[t]+spc.jump_point[t][i]);
 		//	printf("jump_adrs 0x%04X\n", jump_adrs);
@@ -1539,7 +1540,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 				return -1;
 			}
 
-			brr_put_map[brr_fname] = make_pair<uint16, uint16>(start_adrs, loop_adrs);
+			brr_put_map[brr_fname] = pair<uint16, uint16>((uint16)start_adrs, (uint16)loop_adrs);
 			adrs_index += brr_size -2;
 		}
 		else{ // すでに配置したbrrならアドレスを流用するだけ
@@ -1600,7 +1601,7 @@ int spcmake_byFF6::make_spc(const char *spc_fname)
 
 #include "brr2wav.cpp"
 
-int main(int argc, char *argv[])
+int main(int argc, const char *argv[])
 {
 	printf("[ spcmake_byFF6 ver.20210109 ]\n\n");
 
@@ -1618,8 +1619,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	char *input_fname = NULL;
-	char *output_fname = NULL;
+	const char *input_fname = NULL;
+	const char *output_fname = NULL;
 	bool f_ticks = false;
 	bool f_brr2wav = false;
 
