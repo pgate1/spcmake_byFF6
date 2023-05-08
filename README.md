@@ -6,7 +6,8 @@ The hexadecimal control code sequence of the FF6 sound driver can be described o
 ※WARNING  
 The generated SPC contains the FF6 sound driver and waveform data. Do not distribute SPC file.  
 <br>
-<a href="http://gnilda.rosx.net/SPC/F6/command.html" target="_blank">FinalFantasyVI sound control code</a>.  
+<!-- http://gnilda.rosx.net/SPC/F6/command.html -->
+<a href="https://web.archive.org/web/20211206120506/http://gnilda.rosx.net/SPC/F6/sequence_commands.html" target="_blank">FinalFantasyVI sound control code</a>.  
 <br>
 See <a href=usage.md>usage.md</a> for HexMML commands.  
 Please refer to <a href=sample.txt>sample.txt</a> for HexMML sample.  
